@@ -13,7 +13,7 @@ async function streamFromSpringBoot(msg, tabId) {
   try {
     console.log("🟢 BACKGROUND: Connecting to Spring Boot REST API...");
     
-    const response = await fetch('http://localhost:8080/api/analyze', {
+    const response = await fetch('https://codesensai-sync-extension.onrender.com/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(msg)
@@ -90,7 +90,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         if (code) {
           try {
-            const response = await fetch("http://localhost:8080/api/auth/github", {
+            const response = await fetch("https://codesensai-sync-extension.onrender.com/api/auth/github", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ code })
@@ -134,7 +134,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       };
 
       try {
-        const response = await fetch("http://localhost:8080/api/github/push", {
+        const response = await fetch("https://codesensai-sync-extension.onrender.com/api/github/push", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(pushRequest)

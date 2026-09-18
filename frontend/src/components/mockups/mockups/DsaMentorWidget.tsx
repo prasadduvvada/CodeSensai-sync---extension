@@ -28,11 +28,9 @@ const stateLabels: Record<MentorState, string> = {
   guidance: "Guidance",
 };
 
-// Helper to handle Vite's mixed Base64/Path image outputs
 const getIconUrl = (iconPath: string) => {
   if (iconPath.startsWith("data:")) return iconPath;
   if (iconPath.startsWith("chrome-extension://")) return iconPath;
-  // Strip leading slash if Vite adds it, then apply Chrome's extension URL wrapper
   const cleanPath = iconPath.startsWith("/") ? iconPath.slice(1) : iconPath;
   return chrome.runtime.getURL(cleanPath);
 };
@@ -113,6 +111,46 @@ function DsaMentorWidget() {
     setStreakCount(streak);
   };
 
+  // 1. UNIVERSAL GITHUB AUTHENTICATION LISTENER
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get("code");
+
+    if (code) {
+      // Clean the URL so it doesn't trigger again on refresh
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      fetch("https://codesensai-sync-extension.onrender.com/api/auth/github", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.access_token) {
+          fetch("https://api.github.com/user", {
+            headers: { Authorization: `Bearer ${data.access_token}` }
+          })
+          .then(res => res.json())
+          .then(userData => {
+            chrome.storage.local.set({ 
+              githubToken: data.access_token, 
+              githubUser: userData 
+            }, () => {
+              setGithubUser(userData);
+              // If this script is running inside the popup window, close it automatically
+              if (window.opener) {
+                window.close();
+              }
+            });
+          });
+        }
+      })
+      .catch(err => console.error("DSA Mentor Auth Error:", err));
+    }
+  }, []);
+
+  // 2. CHROME STORAGE SYNC
   useEffect(() => {
     if (chrome && chrome.storage) {
       chrome.storage.local.get(['githubUser', 'targetRepo', 'submissionDates'], (result) => {
@@ -128,12 +166,20 @@ function DsaMentorWidget() {
           setSubmissionDates(changes.submissionDates.newValue);
           calculateStreak(changes.submissionDates.newValue);
         }
+        // Update state in main window when popup saves the token
+        if (changes.githubUser && changes.githubUser.newValue) {
+          setGithubUser(changes.githubUser.newValue);
+        }
+        if (changes.targetRepo && changes.targetRepo.newValue) {
+          setTargetRepo(changes.targetRepo.newValue);
+        }
       };
       chrome.storage.onChanged.addListener(storageListener);
       return () => chrome.storage.onChanged.removeListener(storageListener);
     }
   }, []);
 
+  // 3. BACKGROUND MESSAGE LISTENER (SSE STREAM)
   useEffect(() => {
     const slug = window.location.pathname.split('/')[2] || "Current Problem";
     setProblemName(slug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '));
@@ -157,6 +203,7 @@ function DsaMentorWidget() {
     }
   }, []);
 
+  // 4. LEETCODE SUBMISSION LISTENER
   useEffect(() => {
     const getCodeFromEditor = (): Promise<{code: string | null, language: string}> => {
       return new Promise((resolve) => {
@@ -200,9 +247,12 @@ function DsaMentorWidget() {
   }, []);
 
   const handleGithubLogin = () => {
-    chrome.runtime.sendMessage({ type: "GITHUB_LOGIN" }, (response) => {
-      if (response && response.success) setGithubUser(response.user);
-    });
+    const clientId = "Ov23liGc6Ts4IcUUYOKr";
+    const redirectUri = "https://leetcode.com/"; // Universal for ALL users
+    const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=repo,user`;
+    
+    // Open OAuth in a popup window to prevent navigating away from the LeetCode problem
+    window.open(authUrl, "github-oauth", "width=600,height=700");
   };
 
   const handleSaveRepo = () => {

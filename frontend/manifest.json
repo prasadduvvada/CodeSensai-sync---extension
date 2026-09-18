@@ -24,7 +24,7 @@
   "host_permissions": [
     "https://leetcode.com/*",
     "https://*.leetcode.com/*",
-    "http://localhost:8080/*"
+    "https://codesensai-sync-extension.onrender.com/*"
   ],
   
   "content_scripts": [
